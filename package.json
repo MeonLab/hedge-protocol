@@ -1,0 +1,28 @@
+{
+  "name": "distributor",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@matterlabs/hardhat-zksync-deploy": "^0.6.3",
+    "@matterlabs/hardhat-zksync-solc": "^0.3.15",
+    "@matterlabs/hardhat-zksync-verify": "^0.1.4",
+    "@nomiclabs/hardhat-etherscan": "^3.1.2",
+    "erc721a": "^4.2.3",
+    "ethers": "^5.7.2",
+    "hardhat": "^2.13.0",
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.3.9",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.4",
+    "zksync-web3": "^0.14.3"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.8.0"
+  }
+}
