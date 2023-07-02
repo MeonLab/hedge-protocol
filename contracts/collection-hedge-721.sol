@@ -4,37 +4,48 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 // NFTInsurance contract, which is a contract for managing the insurance for NFTs.
-contract NFTInsurance is Ownable ERC721("NFTHedge", "NFTH")  {
-    mapping(address => uint) public buyersPool;
-    mapping(address => uint) public sellersPool;
-    address[] public buyers;
-    address[] public sellers;
+contract CollectionHedge721 is Ownable, ERC721("NFTHedge", "NFTH") {
+    mapping(uint256 => uint) public buyersPool;
+    mapping(uint256 => uint) public sellersPool;
+    uint[] public buyers;
+    uint[] public sellers;
     uint public compensationAmount;
     uint public insuranceAmount;
+    uint public lockedCompensationAmount;
+    uint public lockedInsuranceAmount;
     uint public currentPrice;
     uint public compensationPrice;
-    uint public distributionTime;
+    uint public dueTime;
     bool public isCompensatable;
-    uint public zkSyncBlockTime = 1 seconds;
-    uint private tokenId = 0;
+    uint256 private tokenId = 0;
 
+    // Deposit function shared by buyers and sellers
+    function deposit(
+        uint _amount,
+        uint[] storage _pool,
+        bool isBuyer
+    ) internal {
+        // todo: check due time
+        _safeMint(msg.sender, tokenId);
+        if (isBuyer) {
+            buyersPool[tokenId] = _amount;
+            insuranceAmount += _amount;
+        } else {
+            sellersPool[tokenId] = _amount;
+            compensationAmount += _amount;
+        }
+        _pool.push(tokenId);
+        tokenId++;
+    }
 
     // Allows buyers to deposit funds into the buyers' pool.
     function depositToBuyersPool() public payable {
-        _safeMint(msg.sender, tokenId);
-        buyersPool[tokenId] = msg.value;
-        insuranceAmount += msg.value;
-        buyers.push(tokenId);
-        tokenId++;
+        deposit(msg.value, buyers, true);
     }
 
     // Allows sellers to deposit funds into the sellers' pool.
     function depositToSellersPool() public payable {
-        _safeMint(msg.sender, tokenId);
-        sellersPool[tokenId] = msg.value;
-        compensationAmount += msg.value;
-        sellers.push(tokenId);
-        tokenId++;
+        deposit(msg.value, sellers, false);
     }
 
     // Allows the contract owner to set the current and compensation prices.
@@ -48,7 +59,9 @@ contract NFTInsurance is Ownable ERC721("NFTHedge", "NFTH")  {
 
     // Allows the contract owner to set the due time for the insurance distribution.
     function setDueTime(uint _dueTime) external onlyOwner {
-        distributionTime = _dueTime;
+        dueTime = _dueTime;
+        lockedCompensationAmount = compensationAmount;
+        lockedInsuranceAmount = insuranceAmount;
     }
 
     // Allows the contract owner to trigger the compensation if the current price is less than the compensation price.
@@ -66,33 +79,44 @@ contract NFTInsurance is Ownable ERC721("NFTHedge", "NFTH")  {
             isCompensatable == true,
             "Compensation has not been triggered."
         );
-        require(ownerOf(_tokenId) == msg.sender, "Caller is not the owner of this token.");
-        uint compensationShare = (buyersPool[_tokenId] / insuranceAmount) * compensationAmount;
+        require(
+            ownerOf(_tokenId) == msg.sender,
+            "Caller is not the owner of this token."
+        );
+        uint compensationShare = (buyersPool[_tokenId] /
+            lockedInsuranceAmount) * lockedCompensationAmount;
         uint buyerShare = compensationShare + buyersPool[_tokenId];
         (bool success, ) = payable(msg.sender).call{value: buyerShare}("");
         require(success, "Transfer failed.");
+        buyersPool[_tokenId] = 0;
         insuranceAmount = insuranceAmount - buyersPool[_tokenId];
         compensationAmount = compensationAmount - compensationShare;
     }
 
     // Allows sellers to claim the insurance amount after the due time.
-    function claimInsuranceAmount(uint _tokenId) external {
-        require(ownerOf(_tokenId) == msg.sender, "Caller is not the owner of this token.");
-        uint insuranceShare = (sellersPool[_tokenId] / compensationAmount) * insuranceAmount;
+    function claimInsurance(uint _tokenId) external {
+        require(
+            ownerOf(_tokenId) == msg.sender,
+            "Caller is not the owner of this token."
+        );
+        // todo: check due time
+        uint insuranceShare = (sellersPool[_tokenId] /
+            lockedCompensationAmount) * lockedInsuranceAmount;
         uint sellerShare = insuranceShare + sellersPool[_tokenId];
         (bool success, ) = payable(msg.sender).call{value: sellerShare}("");
         require(success, "Transfer failed.");
+        sellersPool[_tokenId] = 0;
         insuranceAmount = insuranceAmount - insuranceShare;
         compensationAmount = compensationAmount - sellersPool[_tokenId];
     }
 
     // Returns all addresses in the buyers' pool.
-    function getAllBuyers() public view returns (address[] memory) {
+    function getAllBuyers() public view returns (uint[] memory) {
         return buyers;
     }
 
     // Returns all addresses in the sellers' pool.
-    function getAllSellers() public view returns (address[] memory) {
+    function getAllSellers() public view returns (uint[] memory) {
         return sellers;
     }
 
