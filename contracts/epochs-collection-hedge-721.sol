@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./insurance-structure.sol";
 import "./insurance-functions.sol";
+import "./insurance-error.sol";
 
 contract EpochCollectionHedge721 is
     Ownable,
@@ -19,17 +20,14 @@ contract EpochCollectionHedge721 is
     uint256 private epoch = 0;
     uint256 private dueTime = 30;
 
-    function deposit(
-        uint256 _amount,
-        bool isBuyer,
-        uint256 _epoch
-    ) external payable {
-        require(_epoch <= epoch, "Not valid epoch");
-        require(insurances[_epoch].locked == false, "Locked");
+    function deposit(bool isBuyer, uint256 _epoch) external payable {
+        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
+        if (insurances[_epoch].locked) revert PoolLocked();
+
         _safeMint(msg.sender, tokenId);
         InsuranceFunctions.deposit(
             tokenId,
-            _amount,
+            msg.value,
             isBuyer,
             insurances[_epoch]
         );
@@ -63,31 +61,32 @@ contract EpochCollectionHedge721 is
     }
 
     function setCompensatable(uint256 _epoch) external onlyOwner {
-        require(
-            insurances[_epoch].currentPrice <
-                insurances[_epoch].liquidationPrice,
-            "Current price is not less than compensation price."
-        );
+        if (
+            insurances[_epoch].currentPrice >=
+            insurances[_epoch].liquidationPrice
+        )
+            revert CurrentPriceNotLessThanCompensationPrice(
+                insurances[_epoch].currentPrice,
+                insurances[_epoch].liquidationPrice
+            );
 
-        require(
-            insurances[_epoch].expirationDate < block.timestamp,
-            "This epoch insurance is over."
-        );
+        if (insurances[_epoch].expirationDate >= block.timestamp)
+            revert InsuranceOver(
+                insurances[_epoch].expirationDate,
+                block.timestamp
+            );
 
         insurances[_epoch].isCompensatable = true;
     }
 
     function claimCompensation(uint256 _tokenId, uint256 _epoch) external {
-        require(_epoch <= epoch, "Not valid epoch");
+        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
 
-        require(
-            insurances[_epoch].isCompensatable == true,
-            "Compensation has not been triggered."
-        );
-        require(
-            ownerOf(_tokenId) == msg.sender,
-            "Caller is not the owner of this token."
-        );
+        if (!insurances[_epoch].isCompensatable)
+            revert CompensationNotTriggered();
+
+        if (ownerOf(_tokenId) != msg.sender)
+            revert NotTokenOwner(msg.sender, ownerOf(_tokenId));
 
         uint256 buyerTotallyEarn = InsuranceFunctions.claimCompensation(
             _tokenId,
@@ -96,21 +95,20 @@ contract EpochCollectionHedge721 is
         (bool success, ) = payable(msg.sender).call{value: buyerTotallyEarn}(
             ""
         );
-        require(success, "Transfer failed.");
+        if (!success) revert TransferFailed();
     }
 
     function claimInsurance(uint256 _tokenId, uint256 _epoch) external {
-        require(
-            ownerOf(_tokenId) == msg.sender,
-            "Caller is not the owner of this token."
-        );
+        if (ownerOf(_tokenId) != msg.sender)
+            revert NotTokenOwner(msg.sender, ownerOf(_tokenId));
 
-        require(_epoch <= epoch, "Not valid epoch");
+        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
 
-        require(
-            insurances[_epoch].expirationDate < block.timestamp,
-            "Due time is not reached."
-        );
+        if (insurances[_epoch].expirationDate >= block.timestamp)
+            revert DueTimeNotReached(
+                insurances[_epoch].expirationDate,
+                block.timestamp
+            );
 
         uint256 sellerTotallyEarn = InsuranceFunctions.claimInsurance(
             _tokenId,
@@ -120,7 +118,7 @@ contract EpochCollectionHedge721 is
         (bool success, ) = payable(msg.sender).call{value: sellerTotallyEarn}(
             ""
         );
-        require(success, "Transfer failed.");
+        if (!success) revert TransferFailed();
     }
 
     function getReturn(
@@ -150,7 +148,7 @@ contract EpochCollectionHedge721 is
     function getAllBuyers(
         uint256 _epoch
     ) public view returns (uint256[] memory) {
-        require(_epoch <= epoch, "Not valid epoch");
+        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
 
         return insurances[_epoch].buyers;
     }
@@ -158,7 +156,7 @@ contract EpochCollectionHedge721 is
     function getAllSellers(
         uint256 _epoch
     ) public view returns (uint256[] memory) {
-        require(_epoch <= epoch, "Not valid epoch");
+        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
 
         return insurances[_epoch].sellers;
     }
@@ -168,7 +166,7 @@ contract EpochCollectionHedge721 is
         (bool success, ) = payable(msg.sender).call{
             value: address(this).balance
         }("");
-        require(success, "Transfer failed.");
+        if (!success) revert TransferFailed();
     }
 
     // create new insurance
@@ -179,7 +177,9 @@ contract EpochCollectionHedge721 is
     }
 
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
-        require(_expirationDate > block.timestamp, "Not valid expiration date");
+        if (_expirationDate <= block.timestamp)
+            revert InvalidExpirationDate(_expirationDate, block.timestamp);
+
         insurances[epoch].expirationDate = _expirationDate;
     }
 
