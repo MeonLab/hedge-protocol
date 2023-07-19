@@ -8,6 +8,7 @@ import "./insurance-structure.sol";
 import "./insurance-functions.sol";
 import "./insurance-error.sol";
 
+// TODO: record the price of all deposits
 contract EpochCollectionHedge721 is
     Ownable,
     ReentrancyGuard,
@@ -18,10 +19,12 @@ contract EpochCollectionHedge721 is
     mapping(uint256 => Insurance) public insurances;
     uint256 private tokenId = 0;
     uint256 private epoch = 0;
-    uint256 private dueTime = 30;
+    // TODO: duetime should be duration done
+    uint256 private duration = 30;
 
+    // TODO should be if (_epoch == epoch) revert InvalidEpoch(_epoch, epoch); done
     function deposit(bool isBuyer, uint256 _epoch) external payable {
-        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
+        if (_epoch == epoch) revert InvalidEpoch(_epoch, epoch);
         if (insurances[_epoch].locked) revert PoolLocked();
 
         _safeMint(msg.sender, tokenId);
@@ -48,8 +51,9 @@ contract EpochCollectionHedge721 is
         insurances[_epoch].liquidationPrice = _compensationPrice;
     }
 
-    function setDueTime(uint256 _dueTime, uint256 _epoch) external onlyOwner {
-        dueTime = _dueTime;
+    // TODO: remove _epoch done
+    function setDueTime(uint256 _duration) external onlyOwner {
+        duration = _duration;
     }
 
     function lockPool(uint256 _epoch) external onlyOwner {
@@ -60,9 +64,10 @@ contract EpochCollectionHedge721 is
         insurances[_epoch].locked = true;
     }
 
+    // TODO: currentPrice > liquidationPrice done
     function setCompensatable(uint256 _epoch) external onlyOwner {
         if (
-            insurances[_epoch].currentPrice >=
+            insurances[_epoch].currentPrice >
             insurances[_epoch].liquidationPrice
         )
             revert CurrentPriceNotLessThanCompensationPrice(
@@ -161,7 +166,7 @@ contract EpochCollectionHedge721 is
         return insurances[_epoch].sellers;
     }
 
-    // todo: add contract fee
+    // TODO: add contract fee
     function withdrawFees() external onlyOwner {
         (bool success, ) = payable(msg.sender).call{
             value: address(this).balance
@@ -173,7 +178,7 @@ contract EpochCollectionHedge721 is
     function startNewEpoch() external onlyOwner {
         uint256 new_epoch = epoch + 1;
         epoch = new_epoch;
-        insurances[new_epoch].expirationDate = block.timestamp + dueTime;
+        insurances[new_epoch].expirationDate = block.timestamp + duration;
     }
 
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
