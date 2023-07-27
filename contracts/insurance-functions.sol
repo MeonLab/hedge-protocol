@@ -2,57 +2,47 @@ pragma solidity ^0.8.19;
 import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./insurance-structure.sol";
 
-library InsuranceFunctions {
+library InsuranceFunctions1155 {
     using Math for uint256;
 
-    function deposit(
-        uint256 _tokenId,
+    function depositRecording(
         uint256 _amount,
         bool isBuyer,
-        Insurance storage insurance
+        Insurance1155 storage insurance
     ) internal {
         if (isBuyer) {
-            insurance.buyersPool[_tokenId] = _amount;
+            insurance.lockedBuyersFundAmount += _amount;
             insurance.buyersFundAmount += _amount;
-            insurance.buyers.push(_tokenId);
         } else {
-            insurance.sellersPool[_tokenId] = _amount;
             insurance.sellersFundAmount += _amount;
-            insurance.sellers.push(_tokenId);
+            insurance.lockedSellersFundAmount += _amount;
         }
     }
 
     function claimCompensation(
-        uint256 _tokenId,
-        Insurance storage insurance
+        uint256 _amount,
+        Insurance1155 storage insurance
     ) internal returns (uint256) {
-        uint256 buyerOwnPart = insurance.buyersPool[_tokenId];
-        uint256 buyerTotallyEarn = buyerOwnPart.mulDiv(
+        uint256 buyerEarn = _amount.mulDiv(
             insurance.lockedSellersFundAmount,
             insurance.lockedBuyersFundAmount
         );
 
         // update sellersFundAmount
-        insurance.sellersFundAmount =
-            insurance.sellersFundAmount -
-            buyerTotallyEarn;
+        insurance.sellersFundAmount = insurance.sellersFundAmount - buyerEarn;
 
-        return buyerTotallyEarn;
+        return buyerEarn;
     }
 
     function claimInsurance(
-        uint256 _tokenId,
-        Insurance storage insurance
+        uint256 _amount,
+        Insurance1155 storage insurance
     ) internal returns (uint256) {
-        uint256 sellerOwnPart = insurance.sellersPool[_tokenId];
-        uint256 sellerEarn = sellerOwnPart.mulDiv(
+        uint256 sellerEarn = _amount.mulDiv(
             insurance.lockedBuyersFundAmount,
             insurance.lockedSellersFundAmount
         );
-
-        if (insurance.isCompensatable == true) {
-            sellerOwnPart = 0;
-        }
+        uint256 sellerOwnPart = insurance.isCompensatable ? 0 : _amount;
 
         uint256 sellerTotallyEarn = sellerEarn + sellerOwnPart;
 
@@ -63,8 +53,6 @@ library InsuranceFunctions {
         insurance.sellersFundAmount =
             insurance.sellersFundAmount -
             sellerOwnPart;
-
-        insurance.sellersPool[_tokenId] = 0;
 
         return sellerTotallyEarn;
     }

@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-struct Insurance {
+struct Insurance1155 {
     mapping(uint256 => uint256) buyersPool;
     mapping(uint256 => uint256) sellersPool;
+    // TODO: move to EpochCollectionHedge1155?
     uint256[] buyers;
     uint256[] sellers;
     uint256 sellersFundAmount;
@@ -13,6 +14,6 @@ struct Insurance {
     uint256 currentPrice;
     uint256 liquidationPrice;
     uint256 expirationDate;
+    uint256 depositExpirationDate;
     bool isCompensatable;
-    bool locked;
 }
