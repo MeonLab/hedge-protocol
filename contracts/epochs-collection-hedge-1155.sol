@@ -57,11 +57,7 @@ contract EpochCollectionHedge1155 is
                 block.timestamp
             );
 
-        insurances[_epoch].currentPrice = _currentPrice;
-        if (
-            insurances[_epoch].currentPrice <=
-            insurances[_epoch].liquidationPrice
-        ) {
+        if (_currentPrice <= insurances[_epoch].liquidationPrice) {
             insurances[_epoch].isCompensatable = true;
         }
     }
@@ -69,7 +65,7 @@ contract EpochCollectionHedge1155 is
     function setLiquidationPrices(
         uint256 _liquidationPrices,
         uint256 _epoch
-    ) external onlyOwner {
+    ) internal {
         if (insurances[_epoch].expirationDate <= block.timestamp)
             revert InsuranceOver(
                 insurances[_epoch].expirationDate,
@@ -144,22 +140,6 @@ contract EpochCollectionHedge1155 is
         if (!success) revert TransferFailed();
     }
 
-    function getAllBuyers(
-        uint256 _epoch
-    ) public view returns (uint256[] memory) {
-        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
-
-        return insurances[_epoch].buyers;
-    }
-
-    function getAllSellers(
-        uint256 _epoch
-    ) public view returns (uint256[] memory) {
-        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
-
-        return insurances[_epoch].sellers;
-    }
-
     // TODO: add contract fee
     function withdrawFees() external onlyOwner {
         (bool success, ) = payable(msg.sender).call{
@@ -169,13 +149,14 @@ contract EpochCollectionHedge1155 is
     }
 
     // create new insurance
-    function startNewEpoch() external onlyOwner {
-        uint256 new_epoch = epoch + 1;
-        epoch = new_epoch;
+    function startNewEpoch(uint256 _liquidationPrices) external onlyOwner {
+        uint256 newEpoch = epoch + 1;
+        epoch = newEpoch;
         insurances[new_epoch].expirationDate = block.timestamp + duration;
         insurances[new_epoch].depositExpirationDate =
             block.timestamp +
             depositDuration;
+        setLiquidationPrices(_liquidationPrices, newEpoch);
     }
 
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
