@@ -7,11 +7,8 @@ struct Insurance1155 {
     // TODO: move to EpochCollectionHedge1155?
     uint256[] buyers;
     uint256[] sellers;
-    uint256 sellersFundAmount;
-    uint256 buyersFundAmount;
     uint256 lockedSellersFundAmount;
     uint256 lockedBuyersFundAmount;
-    uint256 currentPrice;
     uint256 liquidationPrice;
     uint256 expirationDate;
     uint256 depositExpirationDate;

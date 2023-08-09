@@ -12,9 +12,7 @@ library InsuranceFunctions1155 {
     ) internal {
         if (isBuyer) {
             insurance.lockedBuyersFundAmount += _amount;
-            insurance.buyersFundAmount += _amount;
         } else {
-            insurance.sellersFundAmount += _amount;
             insurance.lockedSellersFundAmount += _amount;
         }
     }
@@ -27,9 +25,6 @@ library InsuranceFunctions1155 {
             insurance.lockedSellersFundAmount,
             insurance.lockedBuyersFundAmount
         );
-
-        // update sellersFundAmount
-        insurance.sellersFundAmount = insurance.sellersFundAmount - buyerEarn;
 
         return buyerEarn;
     }
@@ -45,14 +40,6 @@ library InsuranceFunctions1155 {
         uint256 sellerOwnPart = insurance.isCompensatable ? 0 : _amount;
 
         uint256 sellerTotallyEarn = sellerEarn + sellerOwnPart;
-
-        // update buyersFundAmount
-        insurance.buyersFundAmount = insurance.buyersFundAmount - sellerEarn;
-
-        // update sellersFundAmount
-        insurance.sellersFundAmount =
-            insurance.sellersFundAmount -
-            sellerOwnPart;
 
         return sellerTotallyEarn;
     }
