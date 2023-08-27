@@ -34,3 +34,7 @@
     ```bash
     yarn hardhat verify --network zkSyncTestnet <contract address> ""
     ```
+
+# How does the contract work ?
+
+1.

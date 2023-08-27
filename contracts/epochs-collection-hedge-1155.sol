@@ -47,18 +47,15 @@ contract EpochCollectionHedge1155 is
         );
     }
 
-    function setCurrentPrices(
-        uint256 _currentPrice,
-        uint256 _epoch
-    ) external onlyOwner {
-        if (insurances[_epoch].expirationDate <= block.timestamp)
+    function setIsCompensatable(uint256 _currentPrice) external onlyOwner {
+        if (insurances[epoch].expirationDate <= block.timestamp)
             revert InsuranceOver(
-                insurances[_epoch].expirationDate,
+                insurances[epoch].expirationDate,
                 block.timestamp
             );
 
-        if (_currentPrice <= insurances[_epoch].liquidationPrice) {
-            insurances[_epoch].isCompensatable = true;
+        if (_currentPrice <= insurances[epoch].liquidationPrice) {
+            insurances[epoch].isCompensatable = true;
         }
     }
 
@@ -152,8 +149,8 @@ contract EpochCollectionHedge1155 is
     function startNewEpoch(uint256 _liquidationPrices) external onlyOwner {
         uint256 newEpoch = epoch + 1;
         epoch = newEpoch;
-        insurances[new_epoch].expirationDate = block.timestamp + duration;
-        insurances[new_epoch].depositExpirationDate =
+        insurances[newEpoch].expirationDate = block.timestamp + duration;
+        insurances[newEpoch].depositExpirationDate =
             block.timestamp +
             depositDuration;
         setLiquidationPrices(_liquidationPrices, newEpoch);
