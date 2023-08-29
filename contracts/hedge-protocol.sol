@@ -6,19 +6,29 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "./HedgeERC1155.sol";
 import "./hedge-error.sol";
 import "./hedge-structure.sol";
 import "./hedge-functions.sol";
 
-contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
+// TODO: Add events
+contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     using Math for uint256;
 
     // TODO: duration should be set a real value
     address public vaultAddress;
+    HedgeERC1155 public buyerToken;
+    HedgeERC1155 public sellerToken;
     mapping(uint256 => Hedge1155) public hedges;
     uint256 public epoch = 0;
     uint256 public duration = 600;
     uint256 public depositDuration = 60;
+
+    constructor(address _vaultAddress) {
+        buyerToken = new HedgeERC1155("HedgeBuyerToken", address(this));
+        sellerToken = new HedgeERC1155("HedgeSellerToken", address(this));
+        vaultAddress = _vaultAddress;
+    }
 
     // TODO: set "_uri", overwrite uri function
     // function _exists(uint256 tokenId) internal view returns (bool) {
@@ -35,14 +45,19 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
         vaultAddress = _vaultAddress;
     }
 
-    // each epoch has different token id, buyer is odd, seller is even
     function deposit(bool isBuyer, uint256 _epoch) external payable {
         if (_epoch != epoch) revert InvalidEpoch(_epoch, epoch);
         if (hedges[_epoch].depositExpirationDate <= block.timestamp)
             revert PoolLocked();
 
-        uint256 tokenId = _epoch * 2 + (isBuyer ? 1 : 0);
-        _mint(msg.sender, tokenId, msg.value, "");
+        uint256 tokenId = _epoch;
+
+        if (isBuyer) {
+            buyerToken.mint(msg.sender, tokenId, msg.value, "");
+        } else {
+            sellerToken.mint(msg.sender, tokenId, msg.value, "");
+        }
+
         HedgeFunctions.depositRecording(msg.value, isBuyer, hedges[_epoch]);
     }
 
@@ -81,13 +96,16 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
         if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
         if (hedges[_epoch].isCompensatable != true)
             revert CompensationNotTriggered();
-        if (balanceOf(msg.sender, tokenID) < _amount)
-            revert NotEnoughBalance(balanceOf(msg.sender, tokenID), _amount);
-        if (!isApprovedForAll(msg.sender, address(this)))
+        if (buyerToken.balanceOf(msg.sender, tokenID) < _amount)
+            revert NotEnoughBalance(
+                buyerToken.balanceOf(msg.sender, tokenID),
+                _amount
+            );
+        if (!buyerToken.isApprovedForAll(msg.sender, address(this)))
             revert NotApprovedForAll();
         if (tokenID % 2 != 1) revert InvalidTokenId();
 
-        _burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
+        buyerToken.burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
         uint256 compensationAmount = HedgeFunctions.claimBuyerShares(
             _amount,
             hedges[_epoch]
@@ -109,15 +127,18 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
                 block.timestamp
             );
 
-        if (balanceOf(msg.sender, tokenID) < _amount)
-            revert NotEnoughBalance(balanceOf(msg.sender, tokenID), _amount);
+        if (sellerToken.balanceOf(msg.sender, tokenID) < _amount)
+            revert NotEnoughBalance(
+                sellerToken.balanceOf(msg.sender, tokenID),
+                _amount
+            );
 
-        if (!isApprovedForAll(msg.sender, address(this)))
+        if (!sellerToken.isApprovedForAll(msg.sender, address(this)))
             revert NotApprovedForAll();
 
         if (tokenID % 2 != 0) revert InvalidTokenId(); // seller
 
-        _burn(msg.sender, _epoch, _amount); // Burn the ERC1155 tokens
+        sellerToken.burn(msg.sender, _epoch, _amount); // Burn the ERC1155 tokens
 
         uint256 insuranceAmount = HedgeFunctions.claimSellerShares(
             _amount,
@@ -128,8 +149,8 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
     }
 
     function clientWithdraw(uint256 amount) internal {
-        uint256 fee = amount / 100; // Calculate 1% fee
-        uint256 payoutAmount = amount - fee; // Amount to pay out
+        uint256 fee = amount / 100;
+        uint256 payoutAmount = amount - fee;
 
         (bool vaultSuccess, ) = payable(vaultAddress).call{value: fee}("");
         if (!vaultSuccess) revert TransferFailed();
