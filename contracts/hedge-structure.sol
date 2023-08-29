@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-struct Insurance1155 {
+struct Hedge1155 {
     mapping(uint256 => uint256) buyersPool;
     mapping(uint256 => uint256) sellersPool;
     // TODO: move to EpochCollectionHedge1155?

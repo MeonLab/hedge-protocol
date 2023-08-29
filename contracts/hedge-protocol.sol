@@ -1,22 +1,21 @@
+// SPDX-License-Identifier: MIT
+
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
-import "./insurance-error.sol";
-import "./insurance-structure.sol";
-import "./insurance-functions.sol";
+import "./hedge-error.sol";
+import "./hedge-structure.sol";
+import "./hedge-functions.sol";
 
-contract EpochCollectionHedge1155 is
-    Ownable,
-    ReentrancyGuard,
-    ERC1155("NFTHedge")
-{
+contract NftHedgeProtocol is Ownable, ReentrancyGuard, ERC1155("NFTHedge") {
     using Math for uint256;
 
     // TODO: duration should be set a real value
-    mapping(uint256 => Insurance1155) public insurances;
+    address public vaultAddress;
+    mapping(uint256 => Hedge1155) public hedges;
     uint256 public epoch = 0;
     uint256 public duration = 600;
     uint256 public depositDuration = 60;
@@ -32,30 +31,27 @@ contract EpochCollectionHedge1155 is
     //     _tokenURIs[tokenId] = newURI;
     // }
 
+    function setVaultAddress(address _vaultAddress) external onlyOwner {
+        vaultAddress = _vaultAddress;
+    }
+
     // each epoch has different token id, buyer is odd, seller is even
     function deposit(bool isBuyer, uint256 _epoch) external payable {
         if (_epoch != epoch) revert InvalidEpoch(_epoch, epoch);
-        if (insurances[_epoch].depositExpirationDate <= block.timestamp)
+        if (hedges[_epoch].depositExpirationDate <= block.timestamp)
             revert PoolLocked();
 
         uint256 tokenId = _epoch * 2 + (isBuyer ? 1 : 0);
         _mint(msg.sender, tokenId, msg.value, "");
-        InsuranceFunctions1155.depositRecording(
-            msg.value,
-            isBuyer,
-            insurances[_epoch]
-        );
+        HedgeFunctions.depositRecording(msg.value, isBuyer, hedges[_epoch]);
     }
 
     function setIsCompensatable(uint256 _currentPrice) external onlyOwner {
-        if (insurances[epoch].expirationDate <= block.timestamp)
-            revert InsuranceOver(
-                insurances[epoch].expirationDate,
-                block.timestamp
-            );
+        if (hedges[epoch].expirationDate <= block.timestamp)
+            revert RoundOver(hedges[epoch].expirationDate, block.timestamp);
 
-        if (_currentPrice <= insurances[epoch].liquidationPrice) {
-            insurances[epoch].isCompensatable = true;
+        if (_currentPrice <= hedges[epoch].liquidationPrice) {
+            hedges[epoch].isCompensatable = true;
         }
     }
 
@@ -63,13 +59,10 @@ contract EpochCollectionHedge1155 is
         uint256 _liquidationPrices,
         uint256 _epoch
     ) internal {
-        if (insurances[_epoch].expirationDate <= block.timestamp)
-            revert InsuranceOver(
-                insurances[_epoch].expirationDate,
-                block.timestamp
-            );
+        if (hedges[_epoch].expirationDate <= block.timestamp)
+            revert RoundOver(hedges[_epoch].expirationDate, block.timestamp);
 
-        insurances[_epoch].liquidationPrice = _liquidationPrices;
+        hedges[_epoch].liquidationPrice = _liquidationPrices;
     }
 
     function setDuration(uint256 _duration) external onlyOwner {
@@ -86,7 +79,7 @@ contract EpochCollectionHedge1155 is
         uint256 _amount
     ) external {
         if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
-        if (insurances[_epoch].isCompensatable != true)
+        if (hedges[_epoch].isCompensatable != true)
             revert CompensationNotTriggered();
         if (balanceOf(msg.sender, tokenID) < _amount)
             revert NotEnoughBalance(balanceOf(msg.sender, tokenID), _amount);
@@ -95,14 +88,12 @@ contract EpochCollectionHedge1155 is
         if (tokenID % 2 != 1) revert InvalidTokenId();
 
         _burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
-        uint256 compensationAmount = InsuranceFunctions1155.claimCompensation(
+        uint256 compensationAmount = HedgeFunctions.claimBuyerShares(
             _amount,
-            insurances[_epoch]
+            hedges[_epoch]
         );
-        (bool success, ) = payable(msg.sender).call{value: compensationAmount}(
-            ""
-        );
-        if (!success) revert TransferFailed();
+
+        clientWithdraw(compensationAmount);
     }
 
     function claimInsurance(
@@ -112,9 +103,9 @@ contract EpochCollectionHedge1155 is
     ) external {
         if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
 
-        if (insurances[_epoch].expirationDate >= block.timestamp)
+        if (hedges[_epoch].expirationDate >= block.timestamp)
             revert DueTimeNotReached(
-                insurances[_epoch].expirationDate,
+                hedges[_epoch].expirationDate,
                 block.timestamp
             );
 
@@ -128,29 +119,35 @@ contract EpochCollectionHedge1155 is
 
         _burn(msg.sender, _epoch, _amount); // Burn the ERC1155 tokens
 
-        uint256 insuranceAmount = InsuranceFunctions1155.claimInsurance(
+        uint256 insuranceAmount = HedgeFunctions.claimSellerShares(
             _amount,
-            insurances[_epoch]
+            hedges[_epoch]
         );
 
-        (bool success, ) = payable(msg.sender).call{value: insuranceAmount}("");
-        if (!success) revert TransferFailed();
+        clientWithdraw(insuranceAmount);
     }
 
-    // TODO: add contract fee
-    function withdrawFees() external onlyOwner {
-        (bool success, ) = payable(msg.sender).call{
-            value: address(this).balance
-        }("");
-        if (!success) revert TransferFailed();
+    function clientWithdraw(uint256 amount) internal {
+        uint256 fee = amount / 100; // Calculate 1% fee
+        uint256 payoutAmount = amount - fee; // Amount to pay out
+
+        (bool vaultSuccess, ) = payable(vaultAddress).call{value: fee}("");
+        if (!vaultSuccess) revert TransferFailed();
+
+        (bool userSuccess, ) = payable(msg.sender).call{value: payoutAmount}(
+            ""
+        );
+        if (!userSuccess) revert TransferFailed();
     }
+
+    // TODO: withdraw all
 
     // create new insurance
     function startNewEpoch(uint256 _liquidationPrices) external onlyOwner {
         uint256 newEpoch = epoch + 1;
         epoch = newEpoch;
-        insurances[newEpoch].expirationDate = block.timestamp + duration;
-        insurances[newEpoch].depositExpirationDate =
+        hedges[newEpoch].expirationDate = block.timestamp + duration;
+        hedges[newEpoch].depositExpirationDate =
             block.timestamp +
             depositDuration;
         setLiquidationPrices(_liquidationPrices, newEpoch);
@@ -159,7 +156,7 @@ contract EpochCollectionHedge1155 is
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        insurances[epoch].expirationDate = _expirationDate;
+        hedges[epoch].expirationDate = _expirationDate;
     }
 
     function setDepositExpirationDate(
@@ -167,7 +164,7 @@ contract EpochCollectionHedge1155 is
     ) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        insurances[epoch].depositExpirationDate = _expirationDate;
+        hedges[epoch].depositExpirationDate = _expirationDate;
     }
 
     function getBlockTimestamp() public view returns (uint) {
@@ -175,11 +172,11 @@ contract EpochCollectionHedge1155 is
     }
 
     function isEpochDepositOver(uint _epoch) external view returns (bool) {
-        return insurances[_epoch].depositExpirationDate < block.timestamp;
+        return hedges[_epoch].depositExpirationDate < block.timestamp;
     }
 
     function isEpochExpired(uint _epoch) external view returns (bool) {
-        return insurances[_epoch].expirationDate < block.timestamp;
+        return hedges[_epoch].expirationDate < block.timestamp;
     }
 
     receive() external payable {}

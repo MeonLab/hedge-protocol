@@ -8,7 +8,7 @@ import secrets from '../secrets.json'
 const parameters = []
 // An example of a deploy script that will deploy and call a simple contract.
 export default async function (hre: HardhatRuntimeEnvironment) {
-    const contractName = 'EpochCollectionHedge1155'
+    const contractName = 'NftHedgeProtocol'
     console.log(`Running deploy script for the ${contractName} contract`)
 
     // Initialize the wallet.
