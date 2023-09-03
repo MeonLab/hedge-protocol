@@ -5,7 +5,7 @@ import { Deployer } from '@matterlabs/hardhat-zksync-deploy'
 
 import secrets from '../secrets.json'
 
-const parameters = []
+const parameters = ['0xfb3210f3C01671C24f4ecE8669A8b5d802796b55']
 // An example of a deploy script that will deploy and call a simple contract.
 export default async function (hre: HardhatRuntimeEnvironment) {
     const contractName = 'NftHedgeProtocol'

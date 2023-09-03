@@ -4,7 +4,7 @@ pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-contract FeeVault is Ownable {
+contract HedgeVault is Ownable {
     event FeeReceived(address from, uint256 amount);
     event FeeWithdrawn(address to, uint256 amount);
 
