@@ -20,7 +20,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     HedgeERC1155 public buyerToken;
     HedgeERC1155 public sellerToken;
     mapping(uint256 => Hedge1155) public hedges;
-    uint256 public epoch = 0;
+    uint256 public currRoundID = 0;
     uint256 public duration = 600;
     uint256 public depositDuration = 60;
 
@@ -45,12 +45,11 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         vaultAddress = _vaultAddress;
     }
 
-    function deposit(bool isBuyer, uint256 _epoch) external payable {
-        if (_epoch != epoch) revert InvalidEpoch(_epoch, epoch);
-        if (hedges[_epoch].depositExpirationDate <= block.timestamp)
+    function deposit(bool isBuyer) external payable {
+        if (hedges[currRoundID].depositExpirationDate <= block.timestamp)
             revert PoolLocked();
 
-        uint256 tokenId = _epoch;
+        uint256 tokenId = currRoundID;
 
         if (isBuyer) {
             buyerToken.mint(msg.sender, tokenId, msg.value, "");
@@ -58,26 +57,33 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             sellerToken.mint(msg.sender, tokenId, msg.value, "");
         }
 
-        HedgeFunctions.depositRecording(msg.value, isBuyer, hedges[_epoch]);
+        HedgeFunctions.depositRecording(
+            msg.value,
+            isBuyer,
+            hedges[currRoundID]
+        );
     }
 
     function setIsCompensatable(uint256 _currentPrice) external onlyOwner {
-        if (hedges[epoch].expirationDate <= block.timestamp)
-            revert RoundOver(hedges[epoch].expirationDate, block.timestamp);
+        if (hedges[currRoundID].expirationDate <= block.timestamp)
+            revert RoundOver(
+                hedges[currRoundID].expirationDate,
+                block.timestamp
+            );
 
-        if (_currentPrice <= hedges[epoch].liquidationPrice) {
-            hedges[epoch].isCompensatable = true;
+        if (_currentPrice <= hedges[currRoundID].liquidationPrice) {
+            hedges[currRoundID].isCompensatable = true;
         }
     }
 
-    function setLiquidationPrices(
-        uint256 _liquidationPrices,
-        uint256 _epoch
-    ) internal {
-        if (hedges[_epoch].expirationDate <= block.timestamp)
-            revert RoundOver(hedges[_epoch].expirationDate, block.timestamp);
+    function setLiquidationPrices(uint256 _liquidationPrices) internal {
+        if (hedges[currRoundID].expirationDate <= block.timestamp)
+            revert RoundOver(
+                hedges[currRoundID].expirationDate,
+                block.timestamp
+            );
 
-        hedges[_epoch].liquidationPrice = _liquidationPrices;
+        hedges[currRoundID].liquidationPrice = _liquidationPrices;
     }
 
     function setDuration(uint256 _duration) external onlyOwner {
@@ -89,12 +95,13 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     }
 
     function claimCompensation(
-        uint256 _epoch,
+        // uint256 roundID,
         uint256 tokenID,
         uint256 _amount
     ) external {
-        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
-        if (hedges[_epoch].isCompensatable != true)
+        // the tokenID is the round id for that turn.
+        if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
+        if (hedges[tokenID].isCompensatable != true)
             revert CompensationNotTriggered();
         if (buyerToken.balanceOf(msg.sender, tokenID) < _amount)
             revert NotEnoughBalance(
@@ -103,27 +110,26 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             );
         if (!buyerToken.isApprovedForAll(msg.sender, address(this)))
             revert NotApprovedForAll();
-        if (tokenID % 2 != 1) revert InvalidTokenId();
 
         buyerToken.burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
         uint256 compensationAmount = HedgeFunctions.claimBuyerShares(
             _amount,
-            hedges[_epoch]
+            hedges[tokenID]
         );
 
         clientWithdraw(compensationAmount);
     }
 
     function claimInsurance(
-        uint256 _epoch,
+        // uint256 roundID,
         uint256 tokenID,
         uint256 _amount
     ) external {
-        if (_epoch > epoch) revert InvalidEpoch(_epoch, epoch);
+        if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
 
-        if (hedges[_epoch].expirationDate >= block.timestamp)
+        if (hedges[tokenID].expirationDate >= block.timestamp)
             revert DueTimeNotReached(
-                hedges[_epoch].expirationDate,
+                hedges[tokenID].expirationDate,
                 block.timestamp
             );
 
@@ -136,13 +142,11 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         if (!sellerToken.isApprovedForAll(msg.sender, address(this)))
             revert NotApprovedForAll();
 
-        if (tokenID % 2 != 0) revert InvalidTokenId(); // seller
-
-        sellerToken.burn(msg.sender, _epoch, _amount); // Burn the ERC1155 tokens
+        sellerToken.burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
 
         uint256 insuranceAmount = HedgeFunctions.claimSellerShares(
             _amount,
-            hedges[_epoch]
+            hedges[tokenID]
         );
 
         clientWithdraw(insuranceAmount);
@@ -164,20 +168,22 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     // TODO: withdraw all
 
     // create new insurance
-    function startNewEpoch(uint256 _liquidationPrices) external onlyOwner {
-        uint256 newEpoch = epoch + 1;
-        epoch = newEpoch;
-        hedges[newEpoch].expirationDate = block.timestamp + duration;
-        hedges[newEpoch].depositExpirationDate =
+    function startNewRound(uint256 _liquidationPrices) external onlyOwner {
+        if (hedges[currRoundID].expirationDate >= block.timestamp)
+            revert PoolDuplicated();
+        uint256 newRoundID = currRoundID + 1;
+        currRoundID = newRoundID;
+        hedges[currRoundID].expirationDate = block.timestamp + duration;
+        hedges[currRoundID].depositExpirationDate =
             block.timestamp +
             depositDuration;
-        setLiquidationPrices(_liquidationPrices, newEpoch);
+        setLiquidationPrices(_liquidationPrices);
     }
 
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        hedges[epoch].expirationDate = _expirationDate;
+        hedges[currRoundID].expirationDate = _expirationDate;
     }
 
     function setDepositExpirationDate(
@@ -185,19 +191,19 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     ) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        hedges[epoch].depositExpirationDate = _expirationDate;
+        hedges[currRoundID].depositExpirationDate = _expirationDate;
     }
 
     function getBlockTimestamp() public view returns (uint) {
         return block.timestamp;
     }
 
-    function isEpochDepositOver(uint _epoch) external view returns (bool) {
-        return hedges[_epoch].depositExpirationDate < block.timestamp;
+    function isRoundDepositOver(uint _roundID) external view returns (bool) {
+        return hedges[_roundID].depositExpirationDate < block.timestamp;
     }
 
-    function isEpochExpired(uint _epoch) external view returns (bool) {
-        return hedges[_epoch].expirationDate < block.timestamp;
+    function isRoundExpired(uint _roundID) external view returns (bool) {
+        return hedges[_roundID].expirationDate < block.timestamp;
     }
 
     receive() external payable {}
