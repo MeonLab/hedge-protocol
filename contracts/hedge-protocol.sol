@@ -19,7 +19,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     address public vaultAddress;
     HedgeERC1155 public buyerToken;
     HedgeERC1155 public sellerToken;
-    mapping(uint256 => Hedge1155) public hedges;
+    mapping(uint256 => HedgePool) public pools;
     uint256 public currRoundID = 0;
     uint256 public duration = 600;
     uint256 public depositDuration = 60;
@@ -46,7 +46,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     }
 
     function deposit(bool isBuyer) external payable {
-        if (hedges[currRoundID].depositExpirationDate <= block.timestamp)
+        if (pools[currRoundID].depositExpirationDate <= block.timestamp)
             revert PoolLocked();
 
         uint256 tokenId = currRoundID;
@@ -57,33 +57,29 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             sellerToken.mint(msg.sender, tokenId, msg.value, "");
         }
 
-        HedgeFunctions.depositRecording(
-            msg.value,
-            isBuyer,
-            hedges[currRoundID]
-        );
+        HedgeFunctions.depositRecording(msg.value, isBuyer, pools[currRoundID]);
     }
 
     function setIsCompensatable(uint256 _currentPrice) external onlyOwner {
-        if (hedges[currRoundID].expirationDate <= block.timestamp)
+        if (pools[currRoundID].expirationDate <= block.timestamp)
             revert RoundOver(
-                hedges[currRoundID].expirationDate,
+                pools[currRoundID].expirationDate,
                 block.timestamp
             );
 
-        if (_currentPrice <= hedges[currRoundID].liquidationPrice) {
-            hedges[currRoundID].isCompensatable = true;
+        if (_currentPrice <= pools[currRoundID].liquidationPrice) {
+            pools[currRoundID].isCompensatable = true;
         }
     }
 
     function setLiquidationPrices(uint256 _liquidationPrices) internal {
-        if (hedges[currRoundID].expirationDate <= block.timestamp)
+        if (pools[currRoundID].expirationDate <= block.timestamp)
             revert RoundOver(
-                hedges[currRoundID].expirationDate,
+                pools[currRoundID].expirationDate,
                 block.timestamp
             );
 
-        hedges[currRoundID].liquidationPrice = _liquidationPrices;
+        pools[currRoundID].liquidationPrice = _liquidationPrices;
     }
 
     function setDuration(uint256 _duration) external onlyOwner {
@@ -101,7 +97,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     ) external {
         // the tokenID is the round id for that turn.
         if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
-        if (hedges[tokenID].isCompensatable != true)
+        if (pools[tokenID].isCompensatable != true)
             revert CompensationNotTriggered();
         if (buyerToken.balanceOf(msg.sender, tokenID) < _amount)
             revert NotEnoughBalance(
@@ -114,7 +110,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         buyerToken.burn(msg.sender, tokenID, _amount); // Burn the ERC1155 tokens
         uint256 compensationAmount = HedgeFunctions.claimBuyerShares(
             _amount,
-            hedges[tokenID]
+            pools[tokenID]
         );
 
         clientWithdraw(compensationAmount);
@@ -127,9 +123,9 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     ) external {
         if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
 
-        if (hedges[tokenID].expirationDate >= block.timestamp)
+        if (pools[tokenID].expirationDate >= block.timestamp)
             revert DueTimeNotReached(
-                hedges[tokenID].expirationDate,
+                pools[tokenID].expirationDate,
                 block.timestamp
             );
 
@@ -146,7 +142,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
 
         uint256 insuranceAmount = HedgeFunctions.claimSellerShares(
             _amount,
-            hedges[tokenID]
+            pools[tokenID]
         );
 
         clientWithdraw(insuranceAmount);
@@ -169,12 +165,12 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
 
     // create new insurance
     function startNewRound(uint256 _liquidationPrices) external onlyOwner {
-        if (hedges[currRoundID].expirationDate >= block.timestamp)
+        if (pools[currRoundID].expirationDate >= block.timestamp)
             revert PoolDuplicated();
         uint256 newRoundID = currRoundID + 1;
         currRoundID = newRoundID;
-        hedges[currRoundID].expirationDate = block.timestamp + duration;
-        hedges[currRoundID].depositExpirationDate =
+        pools[currRoundID].expirationDate = block.timestamp + duration;
+        pools[currRoundID].depositExpirationDate =
             block.timestamp +
             depositDuration;
         setLiquidationPrices(_liquidationPrices);
@@ -183,7 +179,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     function setExpirationDate(uint256 _expirationDate) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        hedges[currRoundID].expirationDate = _expirationDate;
+        pools[currRoundID].expirationDate = _expirationDate;
     }
 
     function setDepositExpirationDate(
@@ -191,7 +187,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     ) external onlyOwner {
         if (_expirationDate > block.timestamp)
             revert InvalidExpirationDate(_expirationDate, block.timestamp);
-        hedges[currRoundID].depositExpirationDate = _expirationDate;
+        pools[currRoundID].depositExpirationDate = _expirationDate;
     }
 
     function getBlockTimestamp() public view returns (uint) {
@@ -199,11 +195,74 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     }
 
     function isRoundDepositOver(uint _roundID) external view returns (bool) {
-        return hedges[_roundID].depositExpirationDate < block.timestamp;
+        return pools[_roundID].depositExpirationDate < block.timestamp;
     }
 
     function isRoundExpired(uint _roundID) external view returns (bool) {
-        return hedges[_roundID].expirationDate < block.timestamp;
+        return pools[_roundID].expirationDate < block.timestamp;
+    }
+
+    function getCurrentRoundInfo()
+        external
+        view
+        returns (
+            uint256 lockedSellersFundAmount,
+            uint256 lockedBuyersFundAmount,
+            uint256 liquidationPrice,
+            uint256 expirationDate,
+            uint256 depositExpirationDate,
+            bool isCompensatable
+        )
+    {
+        lockedSellersFundAmount = pools[currRoundID].lockedSellersFundAmount;
+        lockedBuyersFundAmount = pools[currRoundID].lockedBuyersFundAmount;
+        liquidationPrice = pools[currRoundID].liquidationPrice;
+        expirationDate = pools[currRoundID].expirationDate;
+        depositExpirationDate = pools[currRoundID].depositExpirationDate;
+        isCompensatable = pools[currRoundID].isCompensatable;
+    }
+
+    function getRoundInfo(
+        uint256 roundID
+    )
+        external
+        view
+        returns (
+            uint256 lockedSellersFundAmount,
+            uint256 lockedBuyersFundAmount,
+            uint256 liquidationPrice,
+            uint256 expirationDate,
+            uint256 depositExpirationDate,
+            bool isCompensatable
+        )
+    {
+        require(roundID <= currRoundID, "Round ID is not valid");
+
+        lockedSellersFundAmount = pools[roundID].lockedSellersFundAmount;
+        lockedBuyersFundAmount = pools[roundID].lockedBuyersFundAmount;
+        liquidationPrice = pools[roundID].liquidationPrice;
+        expirationDate = pools[roundID].expirationDate;
+        depositExpirationDate = pools[roundID].depositExpirationDate;
+        isCompensatable = pools[roundID].isCompensatable;
+    }
+
+    function getTokensOwnedByAddress(
+        address userAddress
+    )
+        external
+        view
+        returns (
+            uint256[] memory buyerBalances,
+            uint256[] memory sellerBalances
+        )
+    {
+        buyerBalances = new uint256[](currRoundID + 1);
+        sellerBalances = new uint256[](currRoundID + 1);
+
+        for (uint256 i = 0; i <= currRoundID; i++) {
+            buyerBalances[i] = buyerToken.balanceOf(userAddress, i);
+            sellerBalances[i] = sellerToken.balanceOf(userAddress, i);
+        }
     }
 
     receive() external payable {}

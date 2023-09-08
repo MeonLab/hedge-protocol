@@ -10,22 +10,22 @@ library HedgeFunctions {
     function depositRecording(
         uint256 _amount,
         bool isBuyer,
-        Hedge1155 storage hedge
+        HedgePool storage pool
     ) internal {
         if (isBuyer) {
-            hedge.lockedBuyersFundAmount += _amount;
+            pool.lockedBuyersFundAmount += _amount;
         } else {
-            hedge.lockedSellersFundAmount += _amount;
+            pool.lockedSellersFundAmount += _amount;
         }
     }
 
     function claimBuyerShares(
         uint256 _amount,
-        Hedge1155 storage hedge
+        HedgePool storage pool
     ) internal view returns (uint256) {
         uint256 buyerEarn = _amount.mulDiv(
-            hedge.lockedSellersFundAmount,
-            hedge.lockedBuyersFundAmount
+            pool.lockedSellersFundAmount,
+            pool.lockedBuyersFundAmount
         );
 
         return buyerEarn;
@@ -33,13 +33,13 @@ library HedgeFunctions {
 
     function claimSellerShares(
         uint256 _amount,
-        Hedge1155 storage hedge
+        HedgePool storage pool
     ) internal view returns (uint256) {
         uint256 sellerEarn = _amount.mulDiv(
-            hedge.lockedBuyersFundAmount,
-            hedge.lockedSellersFundAmount
+            pool.lockedBuyersFundAmount,
+            pool.lockedSellersFundAmount
         );
-        uint256 sellerOwnPart = hedge.isCompensatable ? 0 : _amount;
+        uint256 sellerOwnPart = pool.isCompensatable ? 0 : _amount;
 
         uint256 sellerTotallyEarn = sellerEarn + sellerOwnPart;
 
