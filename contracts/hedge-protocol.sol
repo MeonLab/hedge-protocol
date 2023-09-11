@@ -10,39 +10,55 @@ import "./HedgeERC1155.sol";
 import "./hedge-error.sol";
 import "./hedge-structure.sol";
 import "./hedge-functions.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 // TODO: Add events
 contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     using Math for uint256;
 
-    // TODO: duration should be set a real value
     address public vaultAddress;
+    string public hedgeTarget;
     HedgeERC1155 public buyerToken;
     HedgeERC1155 public sellerToken;
     mapping(uint256 => HedgePool) public pools;
     uint256 public currRoundID = 0;
-    uint256 public duration = 600;
-    uint256 public depositDuration = 60;
+    uint256 public duration = 300;
+    uint256 public depositDuration = 200;
 
-    constructor(address _vaultAddress) {
-        buyerToken = new HedgeERC1155("HedgeBuyerToken", address(this));
-        sellerToken = new HedgeERC1155("HedgeSellerToken", address(this));
+    constructor(address _vaultAddress, string memory _hedgeTarget) {
         vaultAddress = _vaultAddress;
+        hedgeTarget = _hedgeTarget;
+        // buyerToken = new HedgeERC1155("HedgeBuyerToken", address(this));
+        // sellerToken = new HedgeERC1155("HedgeSellerToken", address(this));
+        buyerToken = new HedgeERC1155(
+            string(
+                abi.encodePacked(
+                    "https://meon.finance/",
+                    Strings.toHexString(address(this)),
+                    "/buyer/"
+                )
+            ),
+            address(this)
+        );
+        sellerToken = new HedgeERC1155(
+            string(
+                abi.encodePacked(
+                    "https://meon.finance/",
+                    Strings.toHexString(address(this)),
+                    "/seller/"
+                )
+            ),
+            address(this)
+        );
     }
-
-    // TODO: set "_uri", overwrite uri function
-    // function _exists(uint256 tokenId) internal view returns (bool) {
-    //     return _balances[tokenId] > 0;
-    // }
-
-    // // setting token uri
-    // function setURI(uint256 tokenId, string memory newURI) public {
-    //     require(_exists(tokenId), "ERC1155: URI set of nonexistent token");
-    //     _tokenURIs[tokenId] = newURI;
-    // }
 
     function setVaultAddress(address _vaultAddress) external onlyOwner {
         vaultAddress = _vaultAddress;
+    }
+
+    function setERC1155URIs(string memory newURI) external onlyOwner {
+        buyerToken.setBaseURI(string(abi.encodePacked(newURI, "/buyer/")));
+        sellerToken.setBaseURI(string(abi.encodePacked(newURI, "/seller/")));
     }
 
     function deposit(bool isBuyer) external payable {
@@ -263,6 +279,18 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             buyerBalances[i] = buyerToken.balanceOf(userAddress, i);
             sellerBalances[i] = sellerToken.balanceOf(userAddress, i);
         }
+    }
+
+    function getBuyerTokenURI(
+        uint256 tokenId
+    ) public view returns (string memory) {
+        return buyerToken.uri(tokenId);
+    }
+
+    function getSellerTokenURI(
+        uint256 tokenId
+    ) public view returns (string memory) {
+        return sellerToken.uri(tokenId);
     }
 
     receive() external payable {}

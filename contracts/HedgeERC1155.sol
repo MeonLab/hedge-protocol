@@ -4,17 +4,31 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 contract HedgeERC1155 is ERC1155Burnable {
-    address private _minter;
+    address public _minter;
+    string public _baseURI;
 
-    constructor(string memory uri, address minterAddress) ERC1155(uri) {
+    constructor(
+        string memory baseTokenURI,
+        address minterAddress
+    ) ERC1155(baseTokenURI) {
         _minter = minterAddress;
+        _baseURI = baseTokenURI;
     }
 
     modifier onlyMinter() {
         require(msg.sender == _minter, "Not authorized to mint");
         _;
+    }
+
+    function setBaseURI(string memory baseURI) external onlyMinter {
+        _baseURI = baseURI;
+    }
+
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        return string(abi.encodePacked(_baseURI, Strings.toString(tokenId)));
     }
 
     function mint(
