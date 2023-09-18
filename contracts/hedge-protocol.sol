@@ -106,11 +106,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         depositDuration = _depositDuration;
     }
 
-    function claimCompensation(
-        // uint256 roundID,
-        uint256 tokenID,
-        uint256 _amount
-    ) external {
+    function buyerClaim(uint256 tokenID, uint256 _amount) external {
         // the tokenID is the round id for that turn.
         if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
         if (pools[tokenID].isCompensatable != true)
@@ -132,11 +128,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         clientWithdraw(compensationAmount);
     }
 
-    function claimInsurance(
-        // uint256 roundID,
-        uint256 tokenID,
-        uint256 _amount
-    ) external {
+    function sellerClaim(uint256 tokenID, uint256 _amount) external {
         if (tokenID > currRoundID) revert InvalidRound(tokenID, currRoundID);
 
         if (pools[tokenID].expirationDate >= block.timestamp)
@@ -179,7 +171,6 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
 
     // TODO: withdraw all
 
-    // create new insurance
     function startNewRound(uint256 _liquidationPrices) external onlyOwner {
         if (pools[currRoundID].expirationDate >= block.timestamp)
             revert PoolDuplicated();
@@ -222,6 +213,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         external
         view
         returns (
+            string memory collectionName,
             uint256 lockedSellersFundAmount,
             uint256 lockedBuyersFundAmount,
             uint256 liquidationPrice,
@@ -230,6 +222,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             bool isCompensatable
         )
     {
+        collectionName = hedgeTarget;
         lockedSellersFundAmount = pools[currRoundID].lockedSellersFundAmount;
         lockedBuyersFundAmount = pools[currRoundID].lockedBuyersFundAmount;
         liquidationPrice = pools[currRoundID].liquidationPrice;
@@ -244,6 +237,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         external
         view
         returns (
+            string memory collectionName,
             uint256 lockedSellersFundAmount,
             uint256 lockedBuyersFundAmount,
             uint256 liquidationPrice,
@@ -254,6 +248,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     {
         require(roundID <= currRoundID, "Round ID is not valid");
 
+        collectionName = hedgeTarget;
         lockedSellersFundAmount = pools[roundID].lockedSellersFundAmount;
         lockedBuyersFundAmount = pools[roundID].lockedBuyersFundAmount;
         liquidationPrice = pools[roundID].liquidationPrice;
