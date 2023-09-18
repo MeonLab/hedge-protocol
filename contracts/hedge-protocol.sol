@@ -219,9 +219,11 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             uint256 liquidationPrice,
             uint256 expirationDate,
             uint256 depositExpirationDate,
-            bool isCompensatable
+            bool isCompensatable,
+            uint256 poolDuration
         )
     {
+        poolDuration = duration;
         collectionName = hedgeTarget;
         lockedSellersFundAmount = pools[currRoundID].lockedSellersFundAmount;
         lockedBuyersFundAmount = pools[currRoundID].lockedBuyersFundAmount;
@@ -243,11 +245,13 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             uint256 liquidationPrice,
             uint256 expirationDate,
             uint256 depositExpirationDate,
-            bool isCompensatable
+            bool isCompensatable,
+            uint256 poolDuration
         )
     {
         require(roundID <= currRoundID, "Round ID is not valid");
 
+        poolDuration = duration;
         collectionName = hedgeTarget;
         lockedSellersFundAmount = pools[roundID].lockedSellersFundAmount;
         lockedBuyersFundAmount = pools[roundID].lockedBuyersFundAmount;
