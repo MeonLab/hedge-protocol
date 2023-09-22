@@ -1,0 +1,12 @@
+{
+    "compilerOptions": {
+      "target": "ESNext",               // Target version of ECMAScript.
+      "module": "NodeNext",            // Use NodeNext modules.
+      "moduleResolution": "NodeNext",  // Set module resolution to NodeNext.
+      
+  
+    },
+  
+  
+  }
+  
