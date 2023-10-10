@@ -11,8 +11,8 @@ contract HedgeERC1155 is ERC1155Burnable {
     string public _baseURI;
 
     constructor(
-        string memory baseTokenURI,
-        address minterAddress
+        address minterAddress,
+        string memory baseTokenURI
     ) ERC1155(baseTokenURI) {
         _minter = minterAddress;
         _baseURI = baseTokenURI;

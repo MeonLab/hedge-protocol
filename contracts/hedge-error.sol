@@ -6,11 +6,16 @@ error NotEnoughBalance(uint256 balance, uint256 amount);
 error NotApprovedForAll();
 error PoolLocked();
 
-error RoundOver(uint256 expirationDate, uint256 currentTime);
+error RoundOver(
+    uint256 expirationDate,
+    uint256 currentTime,
+    bool isCompensatable
+);
 error CompensationNotTriggered();
 error DueTimeNotReached(uint256 expirationDate, uint256 currentTime);
 error TransferFailed();
 error InvalidExpirationDate(uint256 expirationDate, uint256 currentTime);
 error InvalidTokenId();
+error InvalidPrice(uint256 currentPrice, uint256 liquidationPrice);
 
 error PoolDuplicated();
