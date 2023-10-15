@@ -23,4 +23,12 @@ contract HedgeVault is Ownable {
     function getBalance() external view returns (uint256) {
         return address(this).balance;
     }
+
+    receive() external payable {
+        emit FeeReceived(msg.sender, msg.value);
+    }
+
+    fallback() external payable {
+        emit FeeReceived(msg.sender, msg.value);
+    }
 }
