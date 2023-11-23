@@ -1,5 +1,5 @@
 {
-  "name": "distributor",
+  "name": "hedge-protocol",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -9,23 +9,29 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
-    "@matterlabs/hardhat-zksync-deploy": "^0.6.3",
-    "@matterlabs/hardhat-zksync-solc": "^0.4.0",
-    "@matterlabs/hardhat-zksync-verify": "^0.1.8",
+    "@nomicfoundation/hardhat-chai-matchers": "2.0.2",
+    "@nomicfoundation/hardhat-ethers": "3.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "1.0.9",
+    "@nomicfoundation/hardhat-toolbox": "^3.0.0",
+    "@nomicfoundation/hardhat-verify": "2.0.0",
     "@nomiclabs/hardhat-etherscan": "^3.1.7",
-    "erc721a": "^4.2.3",
-    "keccak256": "^1.0.6",
-    "merkletreejs": "^0.3.9",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.0.4",
+    "@typechain/ethers-v6": "0.5.1",
+    "@typechain/hardhat": "9.1.0",
     "@types/chai": "^4.3.4",
     "@types/mocha": "^10.0.1",
     "chai": "^4.3.7",
     "dotenv": "^16.0.3",
-    "ethers": "^5.7.2",
-    "hardhat": "^2.12.4",
+    "erc721a": "^4.2.3",
+    "ethers": "^6.8.1",
+    "hardhat": "^2.19.0",
+    "hardhat-gas-reporter": "1.0.9",
+    "keccak256": "^1.0.6",
+    "merkletreejs": "^0.3.9",
     "mocha": "^10.2.0",
-    "zksync-web3": "^0.14.3"
+    "solidity-coverage": "0.8.5",
+    "ts-node": "^10.9.1",
+    "typechain": "8.3.2",
+    "typescript": "^5.0.4"
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.0"

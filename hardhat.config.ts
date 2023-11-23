@@ -1,39 +1,23 @@
-import '@matterlabs/hardhat-zksync-deploy'
-import '@matterlabs/hardhat-zksync-solc'
-import '@matterlabs/hardhat-zksync-verify'
-
-import secrets from './secrets.json'
+require('@nomicfoundation/hardhat-toolbox')
+const secrets = require('./secrets.json')
 
 module.exports = {
-    zksolc: {
-        version: '1.3.13',
-        compilerSource: 'binary',
-        settings: {},
-    },
-    defaultNetwork: 'zkSyncTestnet',
-
+    solidity: '0.8.20',
     networks: {
-        zkSyncTestnet: {
-            url: 'https://zksync2-testnet.zksync.dev',
-            ethNetwork: `https://goerli.infura.io/v3/${secrets.infuraApiKey}`, // Can also be the RPC URL of the network (e.g. `https://goerli.infura.io/v3/<API_KEY>`)
-            zksync: true,
-            verifyURL:
-                'https://zksync2-testnet-explorer.zksync.dev/contract_verification',
+        hardhat: {
+            chainId: 1337,
         },
-        zkSyncLocalnet: {
-            url: 'http://localhost:3050/',
-            ethNetwork: `http://localhost:8545/`, // Can also be the RPC URL of the network (e.g. `https://goerli.infura.io/v3/<API_KEY>`)
-            zksync: true,
+        arbitrumGoerli: {
+            url: 'https://goerli-rollup.arbitrum.io/rpc',
+            chainId: 421613,
+            accounts: [secrets.meon2PrivateKey],
         },
-        zkSyncMainnet: {
-            url: 'https://mainnet.era.zksync.io',
-            ethNetwork: `https://mainnet.infura.io/v3/${secrets.infuraApiKey}`, // Can also be the RPC URL of the network (e.g. `https://goerli.infura.io/v3/<API_KEY>`)
-            zksync: true,
-            verifyURL:
-                'https://zksync2-mainnet-explorer.zksync.io/contract_verification',
+        arbitrumOne: {
+            url: 'https://arb1.arbitrum.io/rpc',
+            //accounts: [ARBITRUM_MAINNET_TEMPORARY_PRIVATE_KEY]
         },
     },
-    solidity: {
-        version: '0.8.19',
+    etherscan: {
+        apiKey: secrets.arbscanApiKey,
     },
 }

@@ -11,30 +11,30 @@
 }
 ```
 
-# How to deploy on zkSync Era ?
+# How to deploy on Arbitrum ?
 
 1.  ```bash
     yarn hardhat compile
     ```
-    copy abi from artifacts/contracts/contractName.json to scripts/abi/abi.json
-2.  The actual running file is ./deploy/deploy.ts
-    -   need to modify the parameters if there are arguments for contract to init
+2.  ```bash
+    yarn hardhat run ./scripts/deployMETH.js --network arbitrumGoerli
+    ```
+3.  ```bash
+    yarn hardhat run ./scripts/deployVault.js --network arbitrumGoerli
+    ```
+4.  -   need to modify the parameters if there are arguments for contract to init
     -   change the name of contract in script
     ```nodejs
-    const artifact = await deployer.loadArtifact('nameOfContract')
+    const protocol = await hre.ethers.deployContract(nameOfContract, [
+        vaultContract,
+        hedgeTarget,
+    ])
     ```
-    default run testNet
     ```bash
-    yarn hardhat deploy-zksync --network <networks(in hardhat.config.ts)>
+    yarn hardhat run ./scripts/deployHedgeProtocol.js --network <networks(in hardhat.config.js)>
     ```
-3.  default run zkSyncTestnet
-
+5.  default run zkSyncTestnet
     -   need to modify the parameters if there are arguments for contract to init
-
     ```bash
-    yarn hardhat verify --network zkSyncTestnet <contract address> ""
+    yarn hardhat verify --network <networks(in hardhat.config.js)> <contract address> ""
     ```
-
-# How does the contract work ?
-
-1.

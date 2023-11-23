@@ -1,34 +1,34 @@
-// SPDX-License-Identifier: MIT
-
-pragma solidity ^0.8.19;
-
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
 contract HedgeVault is Ownable {
-    event FeeReceived(address from, uint256 amount);
-    event FeeWithdrawn(address to, uint256 amount);
+    event FeeReceived(address indexed token, address from, uint256 amount);
+    event FeeWithdrawn(address indexed token, address to, uint256 amount);
 
-    // Only the owner can withdraw the fees.
-    function withdraw() external onlyOwner {
+    // Withdraw Ether
+    function withdrawEther() external onlyOwner {
         uint256 amount = address(this).balance;
-
-        // Use call() to send the Ether and check its return value.
         (bool success, ) = payable(owner()).call{value: amount}("");
         require(success, "Transfer failed");
-
-        emit FeeWithdrawn(msg.sender, amount);
+        emit FeeWithdrawn(address(0), owner(), amount);
     }
 
-    // Getter to check the balance of the vault
-    function getBalance() external view returns (uint256) {
+    // Withdraw ERC20 Tokens
+    function withdrawToken(IERC20 token) external onlyOwner {
+        uint256 amount = token.balanceOf(address(this));
+        require(token.transfer(owner(), amount), "Token transfer failed");
+        emit FeeWithdrawn(address(token), owner(), amount);
+    }
+
+    // Get the balance of Ether in the vault
+    function getEtherBalance() external view returns (uint256) {
         return address(this).balance;
     }
 
-    receive() external payable {
-        emit FeeReceived(msg.sender, msg.value);
+    // Get the balance of a specific ERC20 token in the vault
+    function getTokenBalance(IERC20 token) external view returns (uint256) {
+        return token.balanceOf(address(this));
     }
 
-    fallback() external payable {
-        emit FeeReceived(msg.sender, msg.value);
-    }
+    // No need for receive() and fallback() for ERC20, as ERC20 tokens are not sent via direct transfer
 }

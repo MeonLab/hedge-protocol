@@ -3,6 +3,7 @@
 pragma solidity ^0.8.19;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
@@ -21,12 +22,18 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     string public hedgeTarget;
     HedgeERC1155 public buyerToken;
     HedgeERC1155 public sellerToken;
+    IERC20 public methToken;
     mapping(uint256 => HedgePool) public pools;
     uint256 public currRoundID = 0;
     uint256 public duration = 180;
     uint256 public depositDuration = 170;
 
-    constructor(address _vaultAddress, string memory _hedgeTarget) {
+    constructor(
+        address _vaultAddress,
+        address _methTokenAddress,
+        string memory _hedgeTarget
+    ) {
+        methToken = IERC20(_methTokenAddress);
         vaultAddress = _vaultAddress;
         hedgeTarget = _hedgeTarget;
         buyerToken = new HedgeERC1155(
@@ -60,7 +67,9 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         sellerToken.setBaseURI(string(abi.encodePacked(newURI, "/seller/")));
     }
 
-    function deposit(bool isBuyer) external payable {
+    function deposit(bool isBuyer, uint256 amount) external payable {
+        require(amount > 0, "Amount must be greater than 0");
+
         if (pools[currRoundID].depositExpirationDate <= block.timestamp)
             revert HedgeLogs.PoolLocked();
 
@@ -72,6 +81,7 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
             );
         }
 
+        methToken.transferFrom(msg.sender, address(this), amount);
         uint256 tokenId = currRoundID;
 
         if (isBuyer) {
@@ -176,19 +186,17 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
     }
 
     function clientWithdraw(uint256 amount) internal {
+        require(amount > 0, "Amount must be greater than 0");
+
         uint256 fee = amount / 100;
         uint256 payoutAmount = amount - fee;
 
-        (bool vaultSuccess, ) = payable(vaultAddress).call{value: fee}("");
-        if (!vaultSuccess) revert HedgeLogs.TransferFailed();
-
-        (bool userSuccess, ) = payable(msg.sender).call{value: payoutAmount}(
-            ""
+        require(methToken.transfer(vaultAddress, fee), "Fee transfer failed");
+        require(
+            methToken.transfer(msg.sender, payoutAmount),
+            "Payout transfer failed"
         );
-        if (!userSuccess) revert HedgeLogs.TransferFailed();
     }
-
-    // TODO: withdraw all
 
     function startNewRound(uint256 _liquidationPrices) external onlyOwner {
         if (pools[currRoundID].expirationDate >= block.timestamp)
@@ -311,13 +319,13 @@ contract NftHedgeProtocol is Ownable, ReentrancyGuard {
         return sellerToken.uri(tokenId);
     }
 
-    function withdrawAll() external onlyOwner {
-        uint256 amount = address(this).balance;
+    // function withdrawAll() external onlyOwner {
+    //     uint256 amount = address(this).balance;
 
-        // Use call() to send the Ether and check its return value.
-        (bool success, ) = payable(owner()).call{value: amount}("");
-        require(success, "Transfer failed");
-    }
+    //     // Use call() to send the Ether and check its return value.
+    //     (bool success, ) = payable(owner()).call{value: amount}("");
+    //     require(success, "Transfer failed");
+    // }
 
     receive() external payable {}
 
